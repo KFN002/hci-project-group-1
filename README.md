@@ -59,7 +59,7 @@ python -m uvicorn document_reviewer.main:app --reload
 
 ## API
 
-The API will be better documented on this repository's [wiki](/wiki) page
+The API will be better documented on this repository's [wiki](https://github.com/KFN002/hci-project-group-1/wiki) page
 
 ## Dependencies
 

@@ -63,6 +63,8 @@ The API will be better documented on this repository's [wiki](https://github.com
 
 ## Dependencies
 
-The direct runtime dependencies are listed in
-[`requirements.txt`](requirements.txt) for pip users and in
-[`pyproject.toml`](pyproject.toml) for both pip and uv.
+The direct runtime dependencies are listed in [`requirements.txt`](requirements.txt) for pip users and in [`pyproject.toml`](pyproject.toml) for both pip and uv.
+
+## Academic Information
+
+This project is a group project conducted by Kirill, Gonçalo, Smridh, Omar, Efe and Fatima for the module of Human-Computer Interactions (LZSCC.241). 

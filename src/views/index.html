@@ -1,12 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- meta information -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document Reviewer</title>
+
+    <!-- stylesheet and scripts -->
     <link rel="stylesheet" href="/styles/index.css">
+    <script src="https://kit.fontawesome.com/58ffc74395.js" crossorigin="anonymous"></script>
 </head>
 <body>
-    abc
+
+    <!-- navigation bar -->
+    <header class="topbar">
+        <a class="logo" href="/">
+            <span>Document<span class="logo-muted">Reviewer</span></span>
+        </a>
+
+        <!-- model selection and setting buttons -->
+        <nav class="top-actions" aria-label="Application actions">
+            <button class="model-picker" id="model-picker" type="button" aria-label="Model Selection">Model <strong id="what-model">Ollama 3.2</strong><span> <i class="fa-solid fa-angle-down"></i></span></button>
+            <button class="icon-button" id="settings" type="button" aria-label="Settings"><i class="fa-solid fa-gear"></i></button>
+        </nav>
+    </header>
+
+    <!-- main container  -->
+    <main class="app-shell">
+        
+        <!-- file explorer -->
+        <aside class="file-panel panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="eyebrow">Workspace</p>
+                    <h1>My documents</h1>
+                </div>
+            </div>
+            <div class="file-list" id="file-list">
+                <p class="empty-list">Uploaded documents will appear here.</p>
+            </div>
+        </aside>
+
+        <!-- main panel / file viewer -->
+        <section class="document-panel">
+            <div class="document-toolbar">
+                <div class="breadcrumbs">
+                    <span>My documents</span><b>/</b><strong>No document selected</strong>
+                </div>
+
+                <div class="toolbar-actions">
+                    <button class="toolbar-button" id="more" type="button" disabled><i class="fa-solid fa-ellipsis"></i></button>
+                </div>
+            </div>
+
+            <div class="document-viewer">
+                <div class="upload-state">
+                    <div class="upload-state-icon"><i class="fa-regular fa-file-lines"></i></div>
+                    <h2>Start your document review</h2>
+                    <p>Upload a PDF or document to view it here and generate AI-powered insights.</p>
+                    <label class="primary-upload" for="document-upload">Choose a document</label>
+                    <input type="file" id="document-upload" accept=".pdf,.doc,.docx,.txt" hidden>
+                    <span class="upload-hint">PDF, DOC, DOCX, or TXT · 25 MB maximum</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- insights panel -->
+        <aside class="insights-panel panel">
+
+            <!-- header for the insights panel -->
+            <div class="insights-heading">
+                <div>
+                    <p class="eyebrow">AI review</p>
+                    <h2>Insights</h2>
+                </div>
+
+                <span class="review-status"><i></i> Awaiting document</span>
+            </div>
+
+            <!-- all tabs possible -->
+            <div class="tabs" role="tablist">
+                <button class="tab active" type="button" role="tab" data-tab="review">Review</button>
+                <button class="tab" type="button" role="tab" data-tab="history">History</button>
+            </div>
+
+            <!-- by default, the review tab is active -->
+            <div class="tab-content" id="review-tab">
+                <div class="insights-empty">
+                    <i class="fa-regular fa-lightbulb"></i>
+                    <strong>Your review will appear here</strong>
+                    <p>Upload a document to see its summary, confidence score, and supporting evidence.</p>
+                </div>
+            </div>
+
+            <div class="tab-content hidden" id="history-tab">
+                <div class="insights-empty">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <strong>No changes yet</strong>
+                    <p>Document review history will appear here.</p>
+                </div>
+            </div>
+
+            <div class="run-wrapper">
+                <button type="button" id="run" disabled><i class="fa-solid fa-rotate-right"></i> Run review</button>
+            </div>
+        </aside>
+    </main>
+
+    <!-- scripts -->
+    <script src="/scripts/index.js" type="module"></script>
 </body>
 </html>

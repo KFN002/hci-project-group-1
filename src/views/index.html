@@ -39,6 +39,10 @@
             <div class="file-list" id="file-list">
                 <p class="empty-list">Uploaded documents will appear here.</p>
             </div>
+            <div class="file-list-actions" id="file-list-actions" hidden>
+                <button class="add-files-button" id="add-files-button" type="button"><i class="fa-solid fa-plus"></i> Add files</button>
+                <button class="add-files-button" id="add-folder-button" type="button"><i class="fa-solid fa-folder-plus"></i> Add folder</button>
+            </div>
         </aside>
 
         <!-- main panel / file viewer -->
@@ -54,12 +58,16 @@
             </div>
 
             <div class="document-viewer">
-                <div class="upload-state">
+                <div class="upload-state" id="upload-dropzone">
                     <div class="upload-state-icon"><i class="fa-regular fa-file-lines"></i></div>
                     <h2>Start your document review</h2>
                     <p>Upload a PDF or document to view it here and generate AI-powered insights.</p>
-                    <label class="primary-upload" for="document-upload">Choose a document</label>
-                    <input type="file" id="document-upload" accept=".pdf,.doc,.docx,.txt" hidden>
+                    <div class="upload-actions">
+                        <label class="primary-upload" for="document-upload">Choose documents</label>
+                        <label class="secondary-upload" for="folder-upload">Choose folder</label>
+                    </div>
+                    <input type="file" id="document-upload" accept=".pdf,.doc,.docx,.txt" multiple hidden>
+                    <input type="file" id="folder-upload" accept=".pdf,.doc,.docx,.txt" webkitdirectory directory multiple hidden>
                     <span class="upload-hint">PDF, DOC, DOCX, or TXT · 25 MB maximum</span>
                 </div>
             </div>

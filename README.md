@@ -16,10 +16,17 @@ In order to execute the following steps, `uv` must already be installed in your 
 git clone https://github.com/KFN002/hci-group-project-1.git hci
 cd hci
 
+# initialize Ollama and install the model used by the app
+ollama serve
+# in another terminal, from the project directory, run:
+ollama pull llama3.2
+
 # after cloning the project and you're on the directory, run these:
 uv sync
 uv run dr
 ```
+
+Make sure to keep Ollama running in the background while using the app. The app uses `llama3.2` by default and can be configured with `OLLAMA_MODEL` if you install and select a different model.
 
 ### Without `uv`
 
@@ -45,13 +52,21 @@ python3 -m pip install -r requirements.txt
 python3 -m pip install --editable .
 ```
 
-Then, to start the development server:
+Before starting the server, initialize ollama with:
+```bash
+# initialize Ollama and install the model used by the app
+ollama serve
+# in another terminal, from the project directory, run:
+ollama pull llama3.2
+```
+
+Afterwards, to be able to actually start the development server:
 
 ```bash
 dr
 ```
 
-You can also run uvicorn directly, with:
+Or you can also run uvicorn directly, with:
 
 ```bash
 python3 -m uvicorn document_reviewer.main:app --reload

@@ -40,9 +40,9 @@ source .venv/bin/activate
 .venv\Scripts\activate
 
 # after setting up venv, install the packages:
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install --editable .
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+python3 -m pip install --editable .
 ```
 
 Then, to start the development server:
@@ -54,7 +54,7 @@ dr
 You can also run uvicorn directly, with:
 
 ```bash
-python -m uvicorn document_reviewer.main:app --reload
+python3 -m uvicorn document_reviewer.main:app --reload
 ```
 
 ## API

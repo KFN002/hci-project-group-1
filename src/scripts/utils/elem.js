@@ -1,17 +1,6 @@
 
 /**
- * utility to get elements much easier than using document.getX or document.querySelector
- * plus it supports from any parent element, not just document
- * 
- * ! WARNING !
- * 
- * if you use 
- * ```js
- * get("element_name")
- * // or
- * get(".element_class")
- * ```
- * you will get an array of elements, not just one
+ * easier way to get elements by selector
  */
 export function get(selector, parent = document) {
     if(selector.startsWith("#")) {
@@ -23,7 +12,9 @@ export function get(selector, parent = document) {
     }
 }
 
-// same but for query selection
+/**
+ * queries a descendant of a parent element
+ */
 export function q(selector, parent = document, all = false) {
     if(all) {
         return parent.querySelectorAll(selector);

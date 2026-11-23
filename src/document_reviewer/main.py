@@ -76,8 +76,9 @@ def extract_text(filename: str, content: bytes) -> str:
 async def create_review(
     files: list[UploadFile] = File(...),
     project_name: str = Form("Project"),
-) -> dict[str, str]:
+) -> dict[str, object]:
     document_parts: list[str] = []
+    source_texts: list[dict[str, str]] = []
 
     for uploaded_file in files:
         content = await uploaded_file.read()
@@ -94,6 +95,10 @@ async def create_review(
         document_parts.append(
             f"## {uploaded_file.filename}\n\n{text or '[No extractable text found]'}"
         )
+        source_texts.append({
+            "filename": uploaded_file.filename or "document",
+            "text": text or "[No extractable text found]",
+        })
 
     if not document_parts:
         raise HTTPException(status_code=400, detail="No supported files were provided")
@@ -106,7 +111,9 @@ async def create_review(
         "You are reviewing a set of project documents. Produce a clear Markdown document named "
         f"Summary.md for the project '{project_name}'. Include: an executive summary, key points, "
         "important evidence, possible inconsistencies or missing information, and a concise conclusion. "
-        "Base the result only on the documents below.\n\n"
+        "Base the result only on the documents below. At the very end, add exactly one final line "
+        "in this format: CONFIDENCE_SCORE: NN, where NN is an integer from 0 to 100 estimating "
+        "how well supported the review is by the provided documents.\n\n"
         f"{combined_text}"
     )
     ollama_url = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
@@ -138,11 +145,66 @@ async def create_review(
     if not summary:
         raise HTTPException(status_code=502, detail="Ollama returned an empty review")
 
+    confidence_match = re.search(
+        r"(?im)^CONFIDENCE_SCORE:\s*(\d{1,3})\s*$",
+        summary,
+    )
+    confidence = int(confidence_match.group(1)) if confidence_match else 75
+    confidence = max(0, min(confidence, 100))
+    if confidence_match:
+        summary = summary[:confidence_match.start()].rstrip()
+
     return {
         "filename": "Summary.md",
         "summary": summary,
         "model": ollama_model,
+        "confidence": str(confidence),
+        "source_texts": source_texts,
     }
+
+@app.post("/api/reviews/followup")
+async def follow_up_review(
+    prompt: str = Form(...),
+    summary: str = Form(...),
+    project_name: str = Form("Project"),
+) -> dict[str, str]:
+    ollama_url = os.getenv("OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+    ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2")
+    follow_up_prompt = (
+        f"You are continuing a document review for '{project_name}'. "
+        "Revise the existing summary and return the complete replacement Summary.md document. "
+        "Do not append the old summary or add a separate follow-up section. "
+        "Preserve useful existing content, apply the user's requested change, and keep clear Markdown structure.\n\n"
+        f"## Existing Summary\n\n{summary[:120000]}\n\n"
+        f"## User Request\n\n{prompt}"
+    )
+    payload = json.dumps({
+        "model": ollama_model,
+        "prompt": follow_up_prompt,
+        "stream": False,
+    }).encode("utf-8")
+    api_request = request.Request(
+        f"{ollama_url}/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with request.urlopen(api_request, timeout=180) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except URLError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Ollama is unavailable at {ollama_url}.",
+        ) from exc
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="The Ollama follow-up timed out") from exc
+
+    response_text = result.get("response", "").strip()
+    if not response_text:
+        raise HTTPException(status_code=502, detail="Ollama returned an empty response")
+
+    return {"response": response_text, "model": ollama_model}
 
 # run the application using uvicorn
 def main() -> None:

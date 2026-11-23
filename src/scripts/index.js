@@ -1,4 +1,6 @@
 import { get, q } from "./utils/elem.js";
+import { escapeHtml, formatBytes, extensionOf, fileIcon } from "./utils/format.js";
+import { downloadTextFile, printSummaryPdf } from "./utils/export.js";
 
 // elements
 const tabs = q(".tab", document, true);
@@ -23,41 +25,24 @@ let previewUrl = null;
 const fileListActions = get("#file-list-actions");
 const addFilesButton = get("#add-files-button");
 const addFolderButton = get("#add-folder-button");
+const moreButton = get("#more");
+const exportMenu = get("#export-menu");
+const exportMarkdownButton = get("#export-markdown");
+const exportPdfButton = get("#export-pdf");
 
-// utility to escape HTML special characters
-function escapeHtml(value) {
-    return String(value)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-}
-
-function formatBytes(bytes) {
-    if(bytes === 0) return "0 B";
-    const units = ["B", "KB", "MB", "GB"];
-    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    const value = bytes /(1024 ** index);
-    return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
-}
-
-function extensionOf(file) {
-    return file.name.split(".").pop().toLowerCase();
-}
-
+/**
+ * utility to check if file is supported based on its extension
+ * @param {*} file 
+ * @returns 
+ */
 function isSupported(file) {
     return acceptedExtensions.has(extensionOf(file));
 }
 
-function fileIcon(file) {
-    const extension = extensionOf(file);
-    if(extension === "pdf") return "fa-file-pdf";
-    if(extension === "txt") return "fa-file-lines";
-    if(extension === "doc" || extension === "docx") return "fa-file-word";
-    return "fa-file";
-}
-
+/**
+ * changes the content of the review tab to show an overview of the project
+ * @param {} project 
+ */
 function setReviewOverview(project) {
     const supported = project.files.length;
     const totalSize = project.files.reduce((sum, file) => sum + file.size, 0);
@@ -93,6 +78,88 @@ function setReviewOverview(project) {
     `;
 }
 
+/**
+ * adds entry to history of the active project and renders the history tab
+ * @param {*} action 
+ * @param {*} detail 
+ * @returns 
+ */
+function addHistory(action, detail) {
+    if(!activeProject) return;
+    activeProject.history ||= [];
+    activeProject.history.unshift({
+        id: `${Date.now()}-${activeProject.history.length}`,
+        action,
+        detail,
+        time: new Date(),
+    });
+    renderHistory();
+}
+
+/**
+ * renders the history tab with the history of the active project
+ */
+function renderHistory() {
+    const historyTab = get("#history-tab");
+    const history = activeProject?.history || [];
+    if(!history.length) {
+        historyTab.innerHTML = `
+            <div class="insights-empty">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <strong>No changes yet</strong>
+                <p>Document review history will appear here.</p>
+            </div>
+        `;
+        return;
+    }
+
+    historyTab.innerHTML = `
+        <div class="history-list">
+            ${history.map(entry => `
+                <article class="history-entry">
+                    <span class="history-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                    <div>
+                        <strong>${escapeHtml(entry.action)}</strong>
+                        <p>${escapeHtml(entry.detail)}</p>
+                        <time>${escapeHtml(entry.time.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</time>
+                    </div>
+                </article>
+            `).join("")}
+        </div>
+    `;
+}
+
+/**
+ * toggles the summary export menu.
+ */
+function toggleExportMenu(event) {
+    event.stopPropagation();
+    exportMenu.hidden = !exportMenu.hidden;
+}
+
+/**
+ * downloads the current Summary.md as a plain md file.
+ */
+function exportSummaryMarkdown() {
+    if(!activeProject?.summaryFile) return;
+    downloadTextFile("Summary.md", activeProject.summaryFile.summary);
+    exportMenu.hidden = true;
+}
+
+/**
+ * opens the browser print dialog so the rendered summary can be saved as PDF.
+ */
+function exportSummaryPdf() {
+    if(!activeProject?.summaryFile) return;
+    const summaryHtml = document.querySelector(".summary-markdown")?.innerHTML
+        || renderMarkdown(activeProject.summaryFile.summary);
+    printSummaryPdf("Summary.md", summaryHtml);
+    exportMenu.hidden = true;
+}
+
+/**
+ * renders the file list in the left panel for the active project.
+ */
 function renderFileList(project) {
     fileList.innerHTML = `
         <h3 class="project-heading">
@@ -111,6 +178,7 @@ function renderFileList(project) {
         renderProjectOverview(project);
     });
 
+    // render each file as a button in the file list
     const projectFiles = fileList.querySelector(".project-files");
     project.files.forEach((file, index) => {
         const button = document.createElement("button");
@@ -125,6 +193,7 @@ function renderFileList(project) {
         projectFiles.appendChild(button);
     });
 
+    // add special button for Summary.md if it exists in the project
     if(project.summaryFile) {
         const summaryButton = document.createElement("button");
         summaryButton.type = "button";
@@ -167,7 +236,13 @@ function renderProjectOverview(project) {
     });
 }
 
+/**
+ * selects a file from the active project and displays its content in the document viewer.
+ * @param {*} index 
+ * @returns 
+ */
 function selectFile(index) {
+    // check if active project exists and if the file index is valid
     if(!activeProject) return;
     const file = activeProject.files[index];
     if(!file) return;
@@ -181,6 +256,7 @@ function selectFile(index) {
     if(previewUrl) URL.revokeObjectURL(previewUrl);
     previewUrl = null;
 
+    // .txt files can be previewed as plain text in a <pre> block
     if(extensionOf(file) === "txt") {
         const reader = new FileReader();
         reader.onload =(event) => {
@@ -198,6 +274,7 @@ function selectFile(index) {
         return;
     }
 
+    // special handling for PDF files, which can be previewed in an iframe
     if(extensionOf(file) === "pdf") {
         previewUrl = URL.createObjectURL(file);
         documentViewer.innerHTML = `
@@ -223,21 +300,278 @@ function selectFile(index) {
     `;
 }
 
+/**
+ * shows summary of the active project in the document viewer, if it exists.
+ * @returns 
+ */
 function showSummary() {
     if(!activeProject?.summaryFile) return;
+    moreButton.disabled = false;
 
     fileList.querySelectorAll(".file-row").forEach(row => row.classList.remove("active"));
     fileList.querySelector(".summary-row")?.classList.add("active");
     breadcrumbs.innerHTML = `<span>My documents</span><b>/</b><strong>${escapeHtml(activeProject.name)} / Summary.md</strong>`;
+    const renderedSummary = renderMarkdown(activeProject.summaryFile.summary);
     documentViewer.innerHTML = `
         <article class="text-preview summary-preview">
             <div class="preview-heading">
                 <div><p class="eyebrow">Generated summary</p><h2>Summary.md</h2></div>
                 <span>${escapeHtml(activeProject.summaryFile.model)}</span>
             </div>
-            <pre>${escapeHtml(activeProject.summaryFile.summary)}</pre>
+            <div class="markdown-body summary-markdown">${renderedSummary}</div>
+            <form class="summary-prompt" id="summary-prompt">
+                <label for="summary-prompt-input">Ask about this summary</label>
+                <div class="summary-prompt-row">
+                    <input id="summary-prompt-input" name="prompt" type="text" autocomplete="off" placeholder="Ask a follow-up question..." required>
+                    <button type="submit"><i class="fa-solid fa-arrow-up"></i><span>Send</span></button>
+                </div>
+            </form>
         </article>
     `;
+
+    const promptForm = get("#summary-prompt");
+    promptForm.addEventListener("submit", submitSummaryPrompt);
+    prepareSummaryHighlights();
+}
+
+/**
+ * splits rendered text into click-sized sentences for highlight metadata.
+ *
+ * @param {string} text Text content from a summary element.
+ * @returns {string[]} Sentence fragments.
+ */
+function splitSentences(text) {
+    return String(text).match(/[^.!?\n]+[.!?]?|[^.!?\n]+$/g)?.map(value => value.trim()).filter(Boolean) || [];
+}
+
+/**
+ * collects useful words for a lightweight source overlap check.
+ *
+ * @param {string} text text to index.
+ * @returns {Set<string>} lowercase words with at least four characters.
+ */
+function keywords(text) {
+    return new Set(String(text).toLowerCase().match(/[a-z0-9]{4,}/g) || []);
+}
+
+/**
+ * matches one summary sentence to the strongest supporting source passage.
+ *
+ * @param {string} sentence summary sentence.
+ * @param {number} index highlight index.
+ * @returns {object} highlight metadata used by the review tab.
+ */
+function buildHighlight(sentence, index) {
+    const summaryWords = keywords(sentence);
+    let best = null;
+
+    for(const source of activeProject.summaryFile.sourceTexts || []) {
+        const sourceWords = keywords(source.text);
+        const overlap = [...summaryWords].filter(word => sourceWords.has(word)).length;
+        const score = summaryWords.size ? overlap / summaryWords.size : 0;
+        const snippet = sentence.slice(0, 180);
+        const position = source.text.toLowerCase().indexOf(snippet.toLowerCase());
+        const candidate = { source, score, position: position >= 0 ? position : findLoosePosition(source.text, sentence) };
+        if(!best || candidate.score > best.score || (candidate.score === best.score && candidate.position >= 0 && best.position < 0)) {
+            best = candidate;
+        }
+    }
+
+    if(!best) {
+        return {
+            id: `highlight-${index}`,
+            text: sentence,
+            confidence: 50,
+            citations: [],
+            model: activeProject.summaryFile.model,
+        };
+    }
+
+    const confidence = Math.max(52, Math.min(96, Math.round(52 + best.score * 44)));
+    return {
+        id: `highlight-${index}`,
+        text: sentence,
+        confidence,
+        citations: [{
+            filename: best.source.filename,
+            text: best.source.text,
+            position: best.position,
+            match: sentence,
+        }],
+        model: activeProject.summaryFile.model,
+    };
+}
+
+/**
+ * Finds a fallback source position when the full sentence cannot be matched.
+ *
+ * @param {string} sourceText Original extracted document text.
+ * @param {string} sentence Summary sentence.
+ * @returns {number} Character offset, or zero when no word matches.
+ */
+function findLoosePosition(sourceText, sentence) {
+    const words = [...keywords(sentence)].slice(0, 6);
+    for(const word of words) {
+        const position = sourceText.toLowerCase().indexOf(word);
+        if(position >= 0) return position;
+    }
+    return 0;
+}
+
+/**
+ * Wraps summary paragraphs and list items as clickable highlight elements.
+ * This is intentionally rerun after every summary or follow-up replacement.
+ */
+function prepareSummaryHighlights() {
+    const container = document.querySelector(".summary-markdown");
+    if(!container || !activeProject?.summaryFile) return;
+
+    const sourceTexts = activeProject.summaryFile.sourceTexts || [];
+    if(!sourceTexts.length) return;
+    activeProject.summaryFile.highlights = [];
+
+    const candidates = container.querySelectorAll("p, li");
+    let highlightIndex = 0;
+    candidates.forEach(element => {
+        const sentences = splitSentences(element.textContent);
+        if(!sentences.length) return;
+
+        const fragments = element.innerHTML;
+        element.innerHTML = "";
+        sentences.forEach(sentence => {
+            if(element.childNodes.length) element.append(document.createTextNode(" "));
+            if(sentence.length < 20) {
+                element.append(document.createTextNode(sentence));
+                return;
+            }
+            const highlight = buildHighlight(sentence, highlightIndex++);
+            activeProject.summaryFile.highlights.push(highlight);
+            const mark = document.createElement("mark");
+            mark.className = "summary-highlight";
+            mark.dataset.highlightId = highlight.id;
+            mark.textContent = sentence;
+            mark.title = `${highlight.confidence}% confidence · ${highlight.citations.length} source citation`;
+            element.append(mark);
+        });
+
+        if(!element.childNodes.length) element.innerHTML = fragments;
+    });
+
+    container.querySelectorAll(".summary-highlight").forEach(mark => {
+        mark.addEventListener("click", () => showHighlightDetails(mark.dataset.highlightId));
+    });
+}
+
+function showHighlightDetails(highlightId) {
+    const highlight = activeProject?.summaryFile?.highlights?.find(item => item.id === highlightId);
+    if(!highlight) return;
+
+    document.querySelectorAll(".summary-highlight").forEach(mark => mark.classList.toggle("active", mark.dataset.highlightId === highlightId));
+    const tabReview = get("#review-tab");
+    tabReview.innerHTML = `
+        <div class="highlight-details">
+            <div class="highlight-detail-heading">
+                <p class="eyebrow">Selected summary highlight</p>
+                <span class="highlight-confidence">${highlight.confidence}%<small>Confidence</small></span>
+            </div>
+            <blockquote>${escapeHtml(highlight.text)}</blockquote>
+            <div class="highlight-meta">
+                <div><span>Model</span><strong>${escapeHtml(highlight.model)}</strong></div>
+                <div><span>Evidence</span><strong>${highlight.citations.length} cited source${highlight.citations.length === 1 ? "" : "s"}</strong></div>
+            </div>
+            <div class="highlight-citations">
+                <h4>Cited sources</h4>
+                ${highlight.citations.map((citation, index) => `
+                    <button type="button" class="highlight-citation" data-citation-index="${index}">
+                        <i class="fa-regular fa-file-lines"></i>
+                        <span><strong>${escapeHtml(citation.filename)}</strong><small>Source match · position ${citation.position + 1}</small></span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                `).join("") || '<p class="no-citations">No source match was found.</p>'}
+            </div>
+        </div>
+    `;
+
+    tabs.forEach(item => item.classList.toggle("active", item.dataset.tab === "review"));
+    tab_content.forEach(content => content.classList.toggle("hidden", content.id !== "review-tab"));
+    tabReview.querySelectorAll(".highlight-citation").forEach(button => {
+        button.addEventListener("click", () => {
+            const citation = highlight.citations[Number(button.dataset.citationIndex)];
+            showSourceCitation(citation);
+        });
+    });
+}
+
+function showSourceCitation(citation) {
+    if(previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = null;
+    breadcrumbs.innerHTML = `<span>My documents</span><b>/</b><strong>${escapeHtml(activeProject.name)} / ${escapeHtml(citation.filename)}</strong>`;
+
+    const before = citation.text.slice(Math.max(0, citation.position - 400), citation.position);
+    const matchLength = Math.max(citation.match.length, 1);
+    const matched = citation.text.slice(citation.position, citation.position + matchLength);
+    const after = citation.text.slice(citation.position + matchLength, citation.position + 400);
+    documentViewer.innerHTML = `
+        <article class="text-preview source-preview">
+            <div class="preview-heading">
+                <div><p class="eyebrow">Cited source</p><h2>${escapeHtml(citation.filename)}</h2></div>
+                <span>Source position ${citation.position + 1}</span>
+            </div>
+            <pre id="cited-source-content">${escapeHtml(before)}<mark id="cited-source-match">${escapeHtml(matched || citation.match)}</mark>${escapeHtml(after)}</pre>
+        </article>
+    `;
+
+    requestAnimationFrame(() => {
+        document.getElementById("cited-source-match")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+}
+
+function renderMarkdown(markdown) {
+    if(window.marked && window.DOMPurify) {
+        return window.DOMPurify.sanitize(window.marked.parse(markdown || ""));
+    }
+
+    return escapeHtml(markdown || "").replace(/\n/g, "<br>");
+}
+
+async function submitSummaryPrompt(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const input = form.elements.prompt;
+    const prompt = input.value.trim();
+    if(!prompt || !activeProject?.summaryFile) return;
+
+    const submitButton = form.querySelector("button[type='submit']");
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>Send</span>';
+
+    const formData = new FormData();
+    formData.append("prompt", prompt);
+    formData.append("summary", activeProject.summaryFile.summary);
+    formData.append("project_name", activeProject.name);
+
+    try {
+        const response = await fetch("/api/reviews/followup", { method: "POST", body: formData });
+        const data = await response.json();
+        if(!response.ok) throw new Error(data.detail || "Follow-up request failed");
+
+        // A chain prompt replaces the complete summary. Follow-up cards are not
+        // a second document and must not be appended below the original summary.
+        activeProject.summaryFile.followUps ||= [];
+        activeProject.summaryFile.followUps.push({ prompt, response: data.response });
+        activeProject.summaryFile.summary = data.response.trim();
+        activeProject.summaryFile.highlights = [];
+        addHistory("Chain prompting", `Replaced Summary.md: ${prompt}`);
+        showSummary();
+    } catch(error) {
+        reviewStatus.innerHTML = "<i></i> Prompt failed";
+        const errorElement = document.createElement("p");
+        errorElement.className = "prompt-error";
+        errorElement.textContent = error.message;
+        form.appendChild(errorElement);
+        submitButton.disabled = false;
+        submitButton.innerHTML = '<i class="fa-solid fa-arrow-up"></i><span>Send</span>';
+    }
 }
 
 function applySelection(files, sourceType) {
@@ -281,7 +615,7 @@ function applySelection(files, sourceType) {
     runButton.disabled = false;
     reviewStatus.innerHTML = "<i></i> Ready for review";
     breadcrumbs.innerHTML = `<span>My documents</span><b>/</b><strong>${escapeHtml(activeProject.name)}</strong>`;
-    get("#more").disabled = false;
+    moreButton.disabled = true;
 
     if(selected.length !== supported.length) {
         const rejected = selected.length - supported.length;
@@ -429,7 +763,14 @@ runButton.addEventListener("click",() => {
                 name: data.filename,
                 summary: data.summary,
                 model: data.model,
+                confidence: Number(data.confidence),
+                followUps: [],
+                sourceTexts: (data.source_texts || []).map(source => ({
+                    filename: source.filename,
+                    text: source.text,
+                })),
             };
+            addHistory("Review generated", `${data.filename} created with ${data.confidence}% confidence`);
             renderFileList(activeProject);
             showSummary();
             setReviewOverview(activeProject);
@@ -440,7 +781,7 @@ runButton.addEventListener("click",() => {
                             <p class="eyebrow">Review complete</p>
                             <h3>${escapeHtml(activeProject.name)}</h3>
                         </div>
-                        <div class="confidence-score">AI<span>${escapeHtml(data.model)}</span></div>
+                        <div class="confidence-score">${escapeHtml(data.confidence)}%<span>Confidence</span></div>
                     </div>
                     <div class="summary-card">
                         <h4>Generated summary</h4>
@@ -473,6 +814,16 @@ runButton.addEventListener("click",() => {
             runButton.disabled = false;
             runButton.innerHTML = '<i class="fa-solid fa-rotate-right"></i> Run review';
         });
+});
+
+moreButton.addEventListener("click", toggleExportMenu);
+exportMarkdownButton.addEventListener("click", exportSummaryMarkdown);
+exportPdfButton.addEventListener("click", exportSummaryPdf);
+
+document.addEventListener("click", event => {
+    if(!exportMenu.hidden && !exportMenu.contains(event.target) && event.target !== moreButton) {
+        exportMenu.hidden = true;
+    }
 });
 
 /**
